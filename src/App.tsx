@@ -1,47 +1,89 @@
-import React from 'react';
-import './App.css';
+import { useEffect, useState } from 'react';
+import { w3cwebsocket as W3CWebSocket } from 'websocket';
+import { GameButtons } from './components/GameButtons/GameButtons';
+import { Login } from './components/Login/Login';
+import { BasicTable } from './components/Table/Table';
+import { VoteForm } from './components/VoteForm/VoteForm';
+import { WSEvents } from './components/wsEvents';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const goodsFromServer: string[] = [
-  'Dumplings',
-  'Carrot',
-  'Eggs',
-  'Ice cream',
-  'Apple',
-  'Bread',
-  'Fish',
-  'Honey',
-  'Jam',
-  'Garlic',
-];
+const client = new W3CWebSocket('ws://localhost:9000');
 
-export const App: React.FC = () => (
-  <div className="App">
-    <button type="button">
-      Start
-    </button>
+export function App() {
+  const [clients, setClients] = useState([]);
+  const [pointsOpacity, setPointsOpacity] = useState(1);
 
-    <button type="button">
-      Sort alphabetically
-    </button>
+  useEffect(() => {
+    client.onopen = () => {
+      client.send([WSEvents.OpenConnection, 'open']);
+    };
 
-    <button type="button">
-      Sort by length
-    </button>
+    client.onmessage = (message: any) => {
+      const serverData = JSON.parse(message.data);
+      const [event] = serverData;
 
-    <button type="button">
-      Reverse
-    </button>
+      serverData.shift();
 
-    <button type="button">
-      Reset
-    </button>
+      switch (event) {
+        case 'openFromServer':
+          setClients(serverData);
+          break;
 
-    <ul className="Goods">
-      <li className="Goods__item">Dumplings</li>
-      <li className="Goods__item">Carrot</li>
-      <li className="Goods__item">Eggs</li>
-      <li className="Goods__item">...</li>
-    </ul>
-  </div>
-);
+        case 'loginFromServer':
+          setClients(serverData);
+          break;
+
+        case 'choosedCardFromServer':
+          setClients(serverData);
+          break;
+
+        case 'startVoteFromServer':
+          setPointsOpacity(0);
+          setClients(serverData);
+          break;
+        case 'finishVoteFromServer':
+          setPointsOpacity(1);
+          setClients(serverData);
+          break;
+
+        default:
+          break;
+      }
+    };
+  }, []);
+
+  const loginClick = (event: any) => {
+    event.preventDefault();
+
+    const name = event.target.name.value;
+
+    client.send([WSEvents.Login, name]);
+  };
+
+  const voteClick = (event: any) => {
+    event.preventDefault();
+
+    const points = event.target.points.value;
+
+    client.send([WSEvents.ChoosedCard, points]);
+  };
+
+  const startClick = () => {
+    client.send([WSEvents.StartVote, 'startVote']);
+  };
+
+  const finishClick = () => {
+    client.send([WSEvents.FinishVote, 'finishVote']);
+  };
+
+  return (
+    <div className="gameWrapper">
+      <Login loginClick={loginClick} />
+      <VoteForm voteClick={voteClick} />
+      <GameButtons
+        startClick={startClick}
+        finishClick={finishClick}
+      />
+      <BasicTable clients={clients} opacity={pointsOpacity} />
+    </div>
+  );
+}
